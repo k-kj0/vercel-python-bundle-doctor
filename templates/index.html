@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vercel Python Bundle Doctor</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        textarea { width: 100%; height: 160px; font-family: monospace; padding: 10px; }
+        button { padding: 10px 20px; background: #000; color: #fff; border: none; cursor: pointer; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
+        .pass { color: green; font-weight: bold; }
+        .warn { color: orange; font-weight: bold; }
+        .fail { color: red; font-weight: bold; }
+        .hint { background: #fff8e1; padding: 8px; margin: 6px 0; border-left: 3px solid #f9a825; }
+    </style>
+</head>
+<body>
+    <h1>🩺 Vercel Python Bundle Doctor</h1>
+    <p>Paste your <code>requirements.txt</code> below. Vercel Python Functions cap out at 250MB (standard) or 500MB (Fluid Compute) uncompressed — this estimates where you'll land before you deploy and fail.</p>
+
+    <form method="post">
+        <textarea name="requirements_text" placeholder="fastapi
+pandas
+numpy
+torch">{{ input_text or "" }}</textarea>
+        <br>
+        <button type="submit">Analyze</button>
+    </form>
+
+    {% if result %}
+    <h2>Result: 
+        {% if "PASS" in result.verdict %}<span class="pass">{{ result.verdict }}</span>
+        {% elif "WARN" in result.verdict %}<span class="warn">{{ result.verdict }}</span>
+        {% else %}<span class="fail">{{ result.verdict }}</span>
+        {% endif %}
+    </h2>
+    <p>Estimated compressed size: <b>{{ result.total_compressed_mb }} MB</b> &nbsp;|&nbsp;
+       Estimated uncompressed: <b>{{ result.estimated_uncompressed_mb }} MB</b></p>
+
+    <table>
+        <tr><th>Package</th><th>Version</th><th>Size (MB)</th></tr>
+        {% for pkg in result.packages %}
+        <tr>
+            <td>{{ pkg.name }}</td>
+            <td>{{ pkg.version }}</td>
+            <td>{{ (pkg.size_bytes / 1024 / 1024) | round(2) }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    {% if result.warnings %}
+    <h3>Suggestions</h3>
+    {% for w in result.warnings %}
+    <div class="hint"><b>{{ w.package }}</b>: {{ w.hint }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+</body>
+</html>
