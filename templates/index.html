@@ -1,170 +1,283 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Vercel Python Bundle Doctor</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            max-width: 900px; margin: 0 auto; padding: 48px 24px;
-            color: #171717; background: #fafafa;
-        }
-        header { margin-bottom: 8px; }
-        h1 { font-size: 28px; margin: 0 0 4px 0; display: flex; align-items: center; gap: 10px; }
-        .subtitle { color: #666; font-size: 15px; line-height: 1.5; margin-bottom: 28px; }
-        .subtitle b { color: #171717; }
+<meta charset="UTF-8">
+<title>Bundle Doctor — Python dependency size checker for Vercel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #000000;
+    --gray-1: #fafafa;
+    --gray-3: #eaeaea;
+    --gray-5: #999999;
+    --gray-7: #666666;
+    --success: #0a7a2f;
+    --success-bg: #e6f4ea;
+    --warn: #b06a00;
+    --warn-bg: #fff3e0;
+    --fail: #c62828;
+    --fail-bg: #fdecea;
+    --accent: #0070f3;
+    --radius: 8px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--sans); color: var(--fg); background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 32px; border-bottom: 1px solid var(--gray-3);
+  }
+  .nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+  .nav-brand .tri { font-size: 15px; }
+  .nav a {
+    color: var(--gray-7); text-decoration: none; font-size: 13px;
+    border: 1px solid var(--gray-3); padding: 6px 14px; border-radius: 6px;
+  }
+  .nav a:hover { border-color: var(--fg); color: var(--fg); }
 
-        .examples { margin-bottom: 20px; }
-        .examples-label { font-size: 13px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 10px; }
-        .example-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-        .chip {
-            background: #fff; border: 1px solid #e2e2e2; border-radius: 20px;
-            padding: 7px 14px; font-size: 13px; cursor: pointer; transition: all 0.15s;
-            color: #333;
-        }
-        .chip:hover { border-color: #171717; background: #f5f5f5; }
-        .chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
-        .dot-pass { background: #0a7a2f; }
-        .dot-warn { background: #b06a00; }
-        .dot-fail { background: #c62828; }
+  .container { max-width: 760px; margin: 0 auto; padding: 56px 24px 80px; }
 
-        form { background: #fff; border: 1px solid #e2e2e2; border-radius: 12px; padding: 20px; }
-        textarea {
-            width: 100%; height: 130px; font-family: 'SF Mono', Monaco, monospace; font-size: 14px;
-            padding: 12px; border: 1px solid #ddd; border-radius: 8px; resize: vertical;
-        }
-        textarea:focus { outline: none; border-color: #171717; }
-        button[type="submit"] {
-            padding: 11px 28px; background: #171717; color: #fff; border: none;
-            border-radius: 8px; cursor: pointer; margin-top: 14px; font-weight: 600; font-size: 14px;
-        }
-        button[type="submit"]:hover { background: #333; }
+  .eyebrow {
+    display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--gray-7); background: var(--gray-1);
+    border: 1px solid var(--gray-3); padding: 4px 10px; border-radius: 20px; margin-bottom: 16px;
+  }
+  h1 { font-size: 34px; letter-spacing: -0.02em; margin: 0 0 12px 0; }
+  .lede { font-size: 16px; line-height: 1.6; color: var(--gray-7); margin-bottom: 36px; max-width: 620px; }
+  .lede b { color: var(--fg); }
+  .lede code { font-family: var(--mono); background: var(--gray-1); padding: 1px 6px; border-radius: 4px; font-size: 14px; }
 
-        .result-card { margin-top: 28px; background: #fff; border: 1px solid #e2e2e2; border-radius: 12px; padding: 24px; }
-        .verdict-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-        .verdict-pill { padding: 4px 12px; border-radius: 20px; font-weight: 600; font-size: 14px; }
-        .pill-pass { background: #e6f4ea; color: #0a7a2f; }
-        .pill-warn { background: #fff3e0; color: #b06a00; }
-        .pill-fail { background: #fdecea; color: #c62828; }
+  .section-label {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--gray-5); margin: 32px 0 12px 0;
+  }
 
-        .stats { display: flex; gap: 20px; margin: 16px 0; font-size: 13px; color: #666; }
-        .stats b { color: #171717; }
+  .category-group { margin-bottom: 18px; }
+  .category-title { font-size: 13px; font-weight: 600; color: var(--gray-7); margin-bottom: 8px; }
+  .example-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--bg); border: 1px solid var(--gray-3); border-radius: 6px;
+    padding: 8px 14px; font-size: 13px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .chip:hover { border-color: var(--fg); background: var(--gray-1); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .dot-pass { background: var(--success); }
+  .dot-warn { background: var(--warn); }
+  .dot-fail { background: var(--fail); }
 
-        .bar-bg { background: #eee; border-radius: 8px; height: 28px; width: 100%; overflow: hidden; margin: 14px 0; }
-        .bar-fill { height: 100%; text-align: right; color: white; font-size: 12px; font-weight: 600; line-height: 28px; padding-right: 8px; }
-        .scale-label { font-size: 12px; color: #999; margin-top: -8px; margin-bottom: 20px; }
+  form {
+    margin-top: 24px; border: 1px solid var(--gray-3); border-radius: var(--radius);
+    background: var(--bg); overflow: hidden;
+  }
+  .form-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; background: var(--gray-1); border-bottom: 1px solid var(--gray-3);
+    font-family: var(--mono); font-size: 12px; color: var(--gray-7);
+  }
+  textarea {
+    width: 100%; height: 150px; font-family: var(--mono); font-size: 14px;
+    padding: 16px; border: none; resize: vertical; display: block;
+  }
+  textarea:focus { outline: none; }
+  .form-footer { padding: 14px 16px; border-top: 1px solid var(--gray-3); display: flex; justify-content: flex-end; }
 
-        .alt-card {
-            background: #eef4ff; border-left: 3px solid #2563eb; padding: 12px 14px;
-            margin: 8px 0; border-radius: 6px; font-size: 14px;
-        }
+  button[type="submit"] {
+    padding: 10px 20px; background: var(--fg); color: var(--bg); border: none;
+    border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  button[type="submit"]:hover { background: #333; }
+  button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
-        th { text-align: left; padding: 8px; color: #888; font-weight: 600; border-bottom: 2px solid #eee; }
-        td { padding: 7px 8px; border-bottom: 1px solid #f0f0f0; }
-        .depth-row td:first-child { color: #666; padding-left: 24px; }
-        .badge { display: inline-block; background: #f0f0f0; border-radius: 10px; padding: 1px 8px; font-size: 11px; color: #666; }
+  .spinner {
+    width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-        h3 { font-size: 15px; margin: 24px 0 8px 0; }
-        .footer-note { text-align: center; color: #aaa; font-size: 12px; margin-top: 40px; }
-    </style>
+  .result { margin-top: 36px; border: 1px solid var(--gray-3); border-radius: var(--radius); padding: 28px; }
+  .verdict-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; font-weight: 600; font-size: 13px; }
+  .pill-pass { background: var(--success-bg); color: var(--success); }
+  .pill-warn { background: var(--warn-bg); color: var(--warn); }
+  .pill-fail { background: var(--fail-bg); color: var(--fail); }
+
+  .stat-row { display: flex; gap: 24px; margin: 18px 0; font-size: 13px; color: var(--gray-7); }
+  .stat-row b { color: var(--fg); font-size: 14px; }
+
+  .bar-track { background: var(--gray-1); border: 1px solid var(--gray-3); border-radius: 6px; height: 30px; overflow: hidden; margin: 16px 0 6px; }
+  .bar-fill { height: 100%; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; color: #fff; font-size: 12px; font-weight: 600; font-family: var(--mono); }
+  .scale-note { font-size: 12px; color: var(--gray-5); margin-bottom: 24px; }
+
+  h3.block-title { font-size: 14px; font-weight: 600; margin: 28px 0 10px; display: flex; align-items: center; gap: 6px; }
+
+  .alt-row {
+    display: flex; justify-content: space-between; align-items: center;
+    border: 1px solid var(--gray-3); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; font-size: 13px;
+  }
+  .alt-row .savings { color: var(--success); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+
+  .fixed-box {
+    background: var(--gray-1); border: 1px solid var(--gray-3); border-radius: 6px;
+    padding: 14px; font-family: var(--mono); font-size: 13px; white-space: pre-wrap; position: relative;
+  }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px; font-size: 12px; padding: 5px 10px;
+    background: var(--bg); border: 1px solid var(--gray-3); border-radius: 5px; cursor: pointer;
+  }
+  .copy-btn:hover { border-color: var(--fg); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+  th { text-align: left; padding: 8px 6px; color: var(--gray-5); font-weight: 600; border-bottom: 1px solid var(--gray-3); font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  td { padding: 7px 6px; border-bottom: 1px solid var(--gray-1); font-family: var(--mono); font-size: 12.5px; }
+  .depth-row td:first-child { color: var(--gray-5); padding-left: 20px; }
+  .type-badge { font-family: var(--sans); background: var(--gray-1); border-radius: 10px; padding: 1px 8px; font-size: 11px; color: var(--gray-7); }
+
+  footer { text-align: center; color: var(--gray-5); font-size: 12px; margin-top: 48px; line-height: 1.6; }
+</style>
 </head>
 <body>
-    <header>
-        <h1>🩺 Vercel Python Bundle Doctor</h1>
-        <p class="subtitle">
-            Paste a <code>requirements.txt</code>. This walks your <b>full transitive dependency tree</b> via live PyPI data —
-            the real reason bundles blow past Vercel's limit even when your direct requirements look small.
-        </p>
-    </header>
 
-    <div class="examples">
-        <div class="examples-label">Try an example</div>
-        <div class="example-chips">
-            <div class="chip" onclick="loadExample('fastapi\nhttpx\npydantic')">
-                <span class="dot dot-pass"></span>Minimal API — should pass
-            </div>
-            <div class="chip" onclick="loadExample('fastapi\npandas\nnumpy\nscipy')">
-                <span class="dot dot-warn"></span>Data science stack — borderline
-            </div>
-            <div class="chip" onclick="loadExample('fastapi\nlangchain\ntorch\ntransformers')">
-                <span class="dot dot-fail"></span>Full AI/LLM stack — likely fails
-            </div>
-            <div class="chip" onclick="loadExample('fastapi\nopencv-python\nnumpy')">
-                <span class="dot dot-fail"></span>Computer vision — check alternatives
-            </div>
-            <div class="chip" onclick="loadExample('fastapi\nrequests\nbeautifulsoup4\nselenium')">
-                <span class="dot dot-warn"></span>Web scraping stack
-            </div>
-        </div>
+<div class="nav">
+  <div class="nav-brand"><span class="tri">▲</span> Bundle Doctor</div>
+  <a href="https://github.com/k-kj0/vercel-python-bundle-doctor" target="_blank">View source →</a>
+</div>
+
+<div class="container">
+  <span class="eyebrow">Unofficial · Not affiliated with Vercel</span>
+  <h1>Will your Python function fit on Vercel?</h1>
+  <p class="lede">
+    Paste a <code>requirements.txt</code>. This resolves your <b>full transitive dependency
+    tree</b> from live PyPI data — the real reason bundles blow past Vercel's 250MB / 500MB
+    limits even when your direct requirements look small.
+  </p>
+
+  <div class="section-label">Try a scenario</div>
+
+  <div class="category-group">
+    <div class="category-title">Common frameworks</div>
+    <div class="example-row">
+      <div class="chip" onclick="loadExample('fastapi\nhttpx\npydantic')"><span class="dot dot-pass"></span>Minimal API</div>
+      <div class="chip" onclick="loadExample('flask\ngunicorn\nrequests')"><span class="dot dot-pass"></span>Flask + Gunicorn</div>
     </div>
+  </div>
 
-    <form method="post" id="analyzeForm">
-        <textarea name="requirements_text" id="reqInput" placeholder="fastapi
+  <div class="category-group">
+    <div class="category-title">Data & ML</div>
+    <div class="example-row">
+      <div class="chip" onclick="loadExample('fastapi\npandas\nnumpy\nscipy')"><span class="dot dot-warn"></span>Data science stack</div>
+      <div class="chip" onclick="loadExample('fastapi\nlangchain\ntorch\ntransformers')"><span class="dot dot-fail"></span>Full AI/LLM stack</div>
+    </div>
+  </div>
+
+  <div class="category-group">
+    <div class="category-title">Vision & automation</div>
+    <div class="example-row">
+      <div class="chip" onclick="loadExample('fastapi\nopencv-python\nnumpy')"><span class="dot dot-fail"></span>Computer vision</div>
+      <div class="chip" onclick="loadExample('requests\nbeautifulsoup4\nselenium')"><span class="dot dot-warn"></span>Web scraping</div>
+    </div>
+  </div>
+
+  <form method="post" id="analyzeForm">
+    <div class="form-header">
+      <span>requirements.txt</span>
+      <span>plain text · one package per line</span>
+    </div>
+    <textarea name="requirements_text" id="reqInput" placeholder="fastapi
 pandas
 numpy">{{ input_text or "" }}</textarea>
-        <br>
-        <button type="submit" id="submitBtn">Analyze Full Dependency Tree</button>
-    </form>
+    <div class="form-footer">
+      <button type="submit" id="submitBtn">
+        <span class="spinner" id="spinner"></span>
+        <span id="btnLabel">Analyze dependency tree</span>
+      </button>
+    </div>
+  </form>
 
-    {% if result %}
-    <div class="result-card">
-        <div class="verdict-row">
-            {% if "PASS" in result.verdict %}
-                <span class="verdict-pill pill-pass">✅ {{ result.verdict }}</span>
-            {% elif "WARN" in result.verdict %}
-                <span class="verdict-pill pill-warn">⚠️ {{ result.verdict }}</span>
-            {% else %}
-                <span class="verdict-pill pill-fail">❌ {{ result.verdict }}</span>
-            {% endif %}
-        </div>
+  {% if result %}
+  <div class="result">
+    {% if "PASS" in result.verdict %}
+      <span class="verdict-pill pill-pass">✓ {{ result.verdict }}</span>
+    {% elif "WARN" in result.verdict %}
+      <span class="verdict-pill pill-warn">! {{ result.verdict }}</span>
+    {% else %}
+      <span class="verdict-pill pill-fail">✕ {{ result.verdict }}</span>
+    {% endif %}
 
-        <div class="stats">
-            <span><b>{{ result.total_direct }}</b> direct packages</span>
-            <span>→</span>
-            <span><b>{{ result.total_resolved }}</b> resolved with transitive deps</span>
-        </div>
+    <div class="stat-row">
+      <span><b>{{ result.total_direct }}</b> direct packages</span>
+      <span>→</span>
+      <span><b>{{ result.total_resolved }}</b> resolved incl. transitive deps</span>
+    </div>
 
-        <div class="bar-bg">
-            <div class="bar-fill" style="width: {{ result.pct_of_fluid_limit }}%; background: {% if result.pct_of_fluid_limit > 100 %}#c62828{% elif result.pct_of_fluid_limit > 50 %}#b06a00{% else %}#0a7a2f{% endif %};">
-                {{ result.estimated_uncompressed_mb }} MB
-            </div>
-        </div>
-        <div class="scale-label">0 MB — 500 MB Fluid Compute ceiling (color shifts orange past the 250 MB standard-path limit)</div>
+    <div class="bar-track">
+      <div class="bar-fill" style="width: {{ result.pct_of_fluid_limit }}%; background: {% if result.pct_of_fluid_limit > 100 %}var(--fail){% elif result.pct_of_fluid_limit > 50 %}var(--warn){% else %}var(--success){% endif %};">
+        {{ result.estimated_uncompressed_mb }} MB
+      </div>
+    </div>
+    <div class="scale-note">0–500MB Fluid Compute ceiling · orange marks the 250MB standard-path threshold</div>
 
-        {% if result.alternatives %}
-        <h3>💡 Live-checked lighter alternatives</h3>
-        {% for alt in result.alternatives %}
-        <div class="alt-card">
-            Swap <b>{{ alt.original }}</b> ({{ alt.original_mb }} MB) → <b>{{ alt.alternative }}</b> ({{ alt.alternative_mb }} MB)
-            — saves <b>{{ alt.savings_mb }} MB</b>
-        </div>
-        {% endfor %}
-        {% endif %}
+    {% if result.alternatives %}
+    <h3 class="block-title">💡 Lighter alternatives (live-checked on PyPI)</h3>
+    {% for alt in result.alternatives %}
+    <div class="alt-row">
+      <span><b>{{ alt.original }}</b> ({{ alt.original_mb }} MB) → <b>{{ alt.alternative }}</b> ({{ alt.alternative_mb }} MB)</span>
+      <span class="savings">−{{ alt.savings_mb }} MB</span>
+    </div>
+    {% endfor %}
+    {% endif %}
 
-        <h3>Full resolved dependency tree</h3>
-        <table>
-            <tr><th>Package</th><th>Version</th><th>Size (MB)</th><th>Type</th></tr>
-            {% for pkg in result.packages %}
-            <tr class="{% if pkg.depth > 0 %}depth-row{% endif %}">
-                <td>{{ "└─ " if pkg.depth > 0 }}{{ pkg.name }}</td>
-                <td>{{ pkg.version }}</td>
-                <td>{{ (pkg.size_bytes / 1024 / 1024) | round(2) }}</td>
-                <td><span class="badge">{{ "direct" if pkg.depth == 0 else "transitive" }}</span></td>
-            </tr>
-            {% endfor %}
-        </table>
+    {% if result.fixed_requirements %}
+    <h3 class="block-title">📋 Suggested fixed requirements.txt</h3>
+    <div class="fixed-box">
+      <button class="copy-btn" onclick="copyFixed()">Copy</button>
+      <span id="fixedText">{{ result.fixed_requirements }}</span>
     </div>
     {% endif %}
 
-    <p class="footer-note">Built to catch the exact bug developers hit on Vercel's own community forum — a small requirements.txt, an oversized deploy.</p>
+    <h3 class="block-title">Full resolved dependency tree</h3>
+    <table>
+      <tr><th>Package</th><th>Version</th><th>Size (MB)</th><th>Type</th></tr>
+      {% for pkg in result.packages %}
+      <tr class="{% if pkg.depth > 0 %}depth-row{% endif %}">
+        <td>{{ "└─ " if pkg.depth > 0 }}{{ pkg.name }}</td>
+        <td>{{ pkg.version }}</td>
+        <td>{{ (pkg.size_bytes / 1024 / 1024) | round(2) }}</td>
+        <td><span class="type-badge">{{ "direct" if pkg.depth == 0 else "transitive" }}</span></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
 
-    <script>
-        function loadExample(text) {
-            document.getElementById('reqInput').value = text;
-            document.getElementById('analyzeForm').submit();
-        }
-    </script>
+  <footer>
+    Built to solve a gap Vercel hasn't shipped a first-party tool for yet —<br>
+    resolving the real bundle size before you deploy, not after it fails.
+  </footer>
+</div>
+
+<script>
+  function loadExample(text) {
+    document.getElementById('reqInput').value = text;
+    document.getElementById('analyzeForm').submit();
+  }
+  document.getElementById('analyzeForm').addEventListener('submit', function () {
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('spinner').style.display = 'inline-block';
+    document.getElementById('btnLabel').textContent = 'Resolving dependency tree…';
+  });
+  function copyFixed() {
+    const text = document.getElementById('fixedText').innerText;
+    navigator.clipboard.writeText(text);
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  }
+</script>
 </body>
 </html>
