@@ -9,12 +9,13 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templa
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "result": None})
+    return templates.TemplateResponse(request, "index.html", {"result": None})
 
 @app.post("/", response_class=HTMLResponse)
 async def analyze(request: Request, requirements_text: str = Form(...)):
     result = await analyze_requirements(requirements_text)
     return templates.TemplateResponse(
+        request,
         "index.html",
-        {"request": request, "result": result, "input_text": requirements_text},
+        {"result": result, "input_text": requirements_text},
     )
