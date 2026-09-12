@@ -1,6 +1,6 @@
 import httpx
 import re
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional
 
 VERCEL_STANDARD_LIMIT_MB = 250
 VERCEL_FLUID_LIMIT_MB = 500
@@ -14,6 +14,9 @@ ALTERNATIVES = {
     "scipy": None,
 }
 
+GPU_TAGS = ("cu11", "cu12", "cu13", "rocm", "cuda")
+
+
 def parse_requirements(text: str) -> List[str]:
     packages = []
     for line in text.splitlines():
@@ -23,6 +26,7 @@ def parse_requirements(text: str) -> List[str]:
         packages.append(line.split(";")[0].strip())
     return packages
 
+
 def split_name_version(requirement: str):
     for sep in ["==", ">=", "<=", "~=", ">", "<"]:
         if sep in requirement:
@@ -30,12 +34,13 @@ def split_name_version(requirement: str):
             return name.strip().lower(), version.strip()
     return requirement.strip().lower(), None
 
-def extract_dep_name(requires_dist_entry: str):
-    # Skip optional/extra-only dependencies (e.g. "aiohttp; extra == 'async'")
+
+def extract_dep_name(requires_dist_entry: str) -> Optional[str]:
     if "extra ==" in requires_dist_entry:
         return None
     match = re.match(r"^([A-Za-z0-9._-]+)", requires_dist_entry.strip())
     return match.group(1).lower() if match else None
+
 
 async def fetch_package_json(client: httpx.AsyncClient, name: str):
     try:
@@ -45,13 +50,39 @@ async def fetch_package_json(client: httpx.AsyncClient, name: str):
     except Exception:
         return None
 
+
 def pick_best_size(data: dict, version: str = None) -> int:
+    """
+    Pick the wheel size that best represents what Vercel's Linux/CPU runtime
+    would actually install — not just whatever PyPI lists first, which can be
+    a GPU/CUDA build several GB larger than the real deployed size.
+    """
     releases = data.get("releases", {})
     target = version or data.get("info", {}).get("version")
     files = releases.get(target, []) or data.get("urls", [])
+
     wheels = [f for f in files if f.get("packagetype") == "bdist_wheel"]
-    chosen = wheels[0] if wheels else (files[0] if files else None)
-    return chosen.get("size", 0) if chosen else 0
+    if not wheels:
+        non_wheels = [f for f in files if f.get("packagetype") != "bdist_wheel"]
+        return non_wheels[0].get("size", 0) if non_wheels else 0
+
+    # 1. Pure-Python wheels are platform-independent and smallest/most honest
+    pure = [w for w in wheels if "none-any" in w.get("filename", "")]
+    if pure:
+        return pure[0].get("size", 0)
+
+    # 2. Prefer manylinux CPU wheels, explicitly excluding GPU/CUDA builds
+    linux_cpu = [
+        w for w in wheels
+        if "manylinux" in w.get("filename", "")
+        and not any(tag in w.get("filename", "").lower() for tag in GPU_TAGS)
+    ]
+    if linux_cpu:
+        return min(w.get("size", 0) for w in linux_cpu)
+
+    # 3. Last resort: smallest available wheel, so one outlier doesn't skew the estimate
+    return min(w.get("size", 0) for w in wheels)
+
 
 async def resolve_tree(client: httpx.AsyncClient, name: str, version: str,
                         visited: Set[str], depth: int = 0) -> List[Dict]:
@@ -77,6 +108,7 @@ async def resolve_tree(client: httpx.AsyncClient, name: str, version: str,
 
     return results
 
+
 async def suggest_alternative(client: httpx.AsyncClient, name: str):
     alt_name = ALTERNATIVES.get(name)
     if not alt_name:
@@ -86,6 +118,16 @@ async def suggest_alternative(client: httpx.AsyncClient, name: str):
         return None
     alt_size = pick_best_size(data)
     return {"name": alt_name, "size_bytes": alt_size}
+
+
+def build_fixed_requirements(original_reqs: List[str], alternatives: List[Dict]) -> str:
+    alt_map = {a["original"]: a["alternative"] for a in alternatives}
+    fixed_lines = []
+    for req in original_reqs:
+        name, _ = split_name_version(req)
+        fixed_lines.append(alt_map.get(name, req))
+    return "\n".join(fixed_lines)
+
 
 async def analyze_requirements(text: str) -> Dict:
     requirements = parse_requirements(text)
@@ -97,7 +139,6 @@ async def analyze_requirements(text: str) -> Dict:
             name, version = split_name_version(req)
             all_nodes.extend(await resolve_tree(client, name, version, visited))
 
-        # Dedupe (keep first occurrence, which is shallowest depth)
         seen = {}
         for node in all_nodes:
             if node["name"] not in seen:
@@ -126,7 +167,6 @@ async def analyze_requirements(text: str) -> Dict:
 
     unique_nodes.sort(key=lambda n: n["size_bytes"], reverse=True)
 
-    verdict = "PASS"
     if estimated_uncompressed_mb > VERCEL_FLUID_LIMIT_MB:
         verdict = "FAIL — exceeds 500MB Fluid Compute limit"
     elif estimated_uncompressed_mb > VERCEL_STANDARD_LIMIT_MB:
@@ -135,6 +175,7 @@ async def analyze_requirements(text: str) -> Dict:
         verdict = "PASS — within limits"
 
     pct_of_fluid_limit = min(100, round((estimated_uncompressed_mb / VERCEL_FLUID_LIMIT_MB) * 100, 1))
+    fixed_requirements = build_fixed_requirements(requirements, alternatives) if alternatives else None
 
     return {
         "packages": unique_nodes,
@@ -145,4 +186,5 @@ async def analyze_requirements(text: str) -> Dict:
         "pct_of_fluid_limit": pct_of_fluid_limit,
         "verdict": verdict,
         "alternatives": alternatives,
+        "fixed_requirements": fixed_requirements,
     }
