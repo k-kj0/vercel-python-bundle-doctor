@@ -1,20 +1,17 @@
 import httpx
-from typing import List, Dict
+import re
+from typing import List, Dict, Set
 
-VERCEL_STANDARD_LIMIT_MB = 250  # uncompressed, standard path
-VERCEL_FLUID_LIMIT_MB = 500     # uncompressed, Python w/ Fluid Compute
+VERCEL_STANDARD_LIMIT_MB = 250
+VERCEL_FLUID_LIMIT_MB = 500
+MAX_DEPTH = 3  # how deep to walk the dependency tree
 
-HEAVY_PACKAGE_HINTS = {
-    "numpy": "Often pulled in transitively — confirm you actually need it directly.",
-    "pandas": "Consider 'polars' for a much smaller, faster alternative.",
-    "torch": "PyTorch is huge (~500MB+). Consider 'onnxruntime' for inference-only, or run ML in a separate service.",
-    "tensorflow": "Very large. Consider 'tensorflow-cpu' or 'tflite-runtime' for inference-only use.",
-    "scipy": "Large binary dependency — check if numpy alone covers your need.",
-    "opencv-python": "Use 'opencv-python-headless' instead — drops GUI deps, much smaller.",
-    "transformers": "Very large with optional deps — 'transformers[torch]' silently pulls in torch too.",
-    "langchain": "Full 'langchain' pulls many integrations. Use 'langchain-core' + only what you need.",
-    "qdrant-client": "Check if a lighter HTTP-only client covers your use case (skip gRPC extras).",
-    "matplotlib": "If used for one chart type, consider a lighter plotting lib.",
+ALTERNATIVES = {
+    "pandas": "polars",
+    "torch": "onnxruntime",
+    "tensorflow": "tflite-runtime",
+    "opencv-python": "opencv-python-headless",
+    "scipy": None,
 }
 
 def parse_requirements(text: str) -> List[str]:
@@ -23,73 +20,129 @@ def parse_requirements(text: str) -> List[str]:
         line = line.strip()
         if not line or line.startswith("#") or line.startswith("-"):
             continue
-        line = line.split(";")[0].strip()
-        packages.append(line)
+        packages.append(line.split(";")[0].strip())
     return packages
 
 def split_name_version(requirement: str):
     for sep in ["==", ">=", "<=", "~=", ">", "<"]:
         if sep in requirement:
             name, version = requirement.split(sep, 1)
-            return name.strip(), version.strip()
-    return requirement.strip(), None
+            return name.strip().lower(), version.strip()
+    return requirement.strip().lower(), None
 
-async def get_package_size(client: httpx.AsyncClient, name: str, version: str = None) -> Dict:
-    url = f"https://pypi.org/pypi/{name}/json"
+def extract_dep_name(requires_dist_entry: str):
+    # Skip optional/extra-only dependencies (e.g. "aiohttp; extra == 'async'")
+    if "extra ==" in requires_dist_entry:
+        return None
+    match = re.match(r"^([A-Za-z0-9._-]+)", requires_dist_entry.strip())
+    return match.group(1).lower() if match else None
+
+async def fetch_package_json(client: httpx.AsyncClient, name: str):
     try:
-        resp = await client.get(url, timeout=10)
+        resp = await client.get(f"https://pypi.org/pypi/{name}/json", timeout=10)
         resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        return {"name": name, "version": version, "size_bytes": 0, "error": str(e)}
+        return resp.json()
+    except Exception:
+        return None
 
+def pick_best_size(data: dict, version: str = None) -> int:
     releases = data.get("releases", {})
-    target_version = version or data.get("info", {}).get("version")
-    files = releases.get(target_version, []) or data.get("urls", [])
+    target = version or data.get("info", {}).get("version")
+    files = releases.get(target, []) or data.get("urls", [])
+    wheels = [f for f in files if f.get("packagetype") == "bdist_wheel"]
+    chosen = wheels[0] if wheels else (files[0] if files else None)
+    return chosen.get("size", 0) if chosen else 0
 
-    wheel_files = [f for f in files if f.get("packagetype") == "bdist_wheel"]
-    chosen = wheel_files[0] if wheel_files else (files[0] if files else None)
-    size_bytes = chosen.get("size", 0) if chosen else 0
+async def resolve_tree(client: httpx.AsyncClient, name: str, version: str,
+                        visited: Set[str], depth: int = 0) -> List[Dict]:
+    if name in visited or depth > MAX_DEPTH:
+        return []
+    visited.add(name)
 
-    return {
-        "name": name,
-        "version": target_version,
-        "size_bytes": size_bytes,
-        "error": None if chosen else "No release files found",
-    }
+    data = await fetch_package_json(client, name)
+    if not data:
+        return [{"name": name, "version": version, "size_bytes": 0,
+                  "depth": depth, "error": "not found on PyPI"}]
+
+    size = pick_best_size(data, version)
+    node = {"name": name, "version": version or data["info"]["version"],
+            "size_bytes": size, "depth": depth, "error": None}
+
+    results = [node]
+    requires = data.get("info", {}).get("requires_dist") or []
+    for entry in requires:
+        dep_name = extract_dep_name(entry)
+        if dep_name and dep_name not in visited:
+            results.extend(await resolve_tree(client, dep_name, None, visited, depth + 1))
+
+    return results
+
+async def suggest_alternative(client: httpx.AsyncClient, name: str):
+    alt_name = ALTERNATIVES.get(name)
+    if not alt_name:
+        return None
+    data = await fetch_package_json(client, alt_name)
+    if not data:
+        return None
+    alt_size = pick_best_size(data)
+    return {"name": alt_name, "size_bytes": alt_size}
 
 async def analyze_requirements(text: str) -> Dict:
     requirements = parse_requirements(text)
-    results = []
+    visited: Set[str] = set()
+    all_nodes: List[Dict] = []
 
     async with httpx.AsyncClient() as client:
         for req in requirements:
             name, version = split_name_version(req)
-            info = await get_package_size(client, name, version)
-            results.append(info)
+            all_nodes.extend(await resolve_tree(client, name, version, visited))
 
-    total_bytes = sum(r["size_bytes"] for r in results)
-    estimated_uncompressed_mb = (total_bytes * 3) / (1024 * 1024)  # rule-of-thumb expansion
-    total_compressed_mb = total_bytes / (1024 * 1024)
+        # Dedupe (keep first occurrence, which is shallowest depth)
+        seen = {}
+        for node in all_nodes:
+            if node["name"] not in seen:
+                seen[node["name"]] = node
+        unique_nodes = list(seen.values())
 
-    results_sorted = sorted(results, key=lambda r: r["size_bytes"], reverse=True)
+        total_bytes = sum(n["size_bytes"] for n in unique_nodes)
+        estimated_uncompressed_mb = (total_bytes * 3) / (1024 * 1024)
+        total_compressed_mb = total_bytes / (1024 * 1024)
 
-    warnings = []
-    for r in results_sorted:
-        hint = HEAVY_PACKAGE_HINTS.get(r["name"].lower())
-        if hint:
-            warnings.append({"package": r["name"], "hint": hint})
+        top_level_names = {split_name_version(r)[0] for r in requirements}
+        alternatives = []
+        for name in top_level_names:
+            alt = await suggest_alternative(client, name)
+            if alt:
+                original = seen.get(name)
+                if original:
+                    savings_mb = (original["size_bytes"] - alt["size_bytes"]) / (1024 * 1024)
+                    alternatives.append({
+                        "original": name,
+                        "original_mb": round(original["size_bytes"] / 1024 / 1024, 2),
+                        "alternative": alt["name"],
+                        "alternative_mb": round(alt["size_bytes"] / 1024 / 1024, 2),
+                        "savings_mb": round(savings_mb, 2),
+                    })
 
-    verdict = "PASS — well within limits"
+    unique_nodes.sort(key=lambda n: n["size_bytes"], reverse=True)
+
+    verdict = "PASS"
     if estimated_uncompressed_mb > VERCEL_FLUID_LIMIT_MB:
         verdict = "FAIL — exceeds 500MB Fluid Compute limit"
     elif estimated_uncompressed_mb > VERCEL_STANDARD_LIMIT_MB:
-        verdict = "WARN — exceeds 250MB standard limit, requires Fluid Compute opt-in"
+        verdict = "WARN — exceeds 250MB standard limit, needs Fluid Compute opt-in"
+    else:
+        verdict = "PASS — within limits"
+
+    pct_of_fluid_limit = min(100, round((estimated_uncompressed_mb / VERCEL_FLUID_LIMIT_MB) * 100, 1))
 
     return {
-        "packages": results_sorted,
+        "packages": unique_nodes,
+        "total_direct": len(requirements),
+        "total_resolved": len(unique_nodes),
         "total_compressed_mb": round(total_compressed_mb, 2),
         "estimated_uncompressed_mb": round(estimated_uncompressed_mb, 2),
+        "pct_of_fluid_limit": pct_of_fluid_limit,
         "verdict": verdict,
-        "warnings": warnings,
+        "alternatives": alternatives,
     }
