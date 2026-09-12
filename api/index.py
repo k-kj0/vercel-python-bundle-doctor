@@ -7,9 +7,11 @@ from core.analyzer import analyze_requirements
 app = FastAPI()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse(request, "index.html", {"result": None})
+
 
 @app.post("/", response_class=HTMLResponse)
 async def analyze(request: Request, requirements_text: str = Form(...)):
