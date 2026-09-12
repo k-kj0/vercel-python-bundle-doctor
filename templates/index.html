@@ -3,57 +3,73 @@
 <head>
     <title>Vercel Python Bundle Doctor</title>
     <style>
-        body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
-        textarea { width: 100%; height: 160px; font-family: monospace; padding: 10px; }
-        button { padding: 10px 20px; background: #000; color: #fff; border: none; cursor: pointer; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
-        .pass { color: green; font-weight: bold; }
-        .warn { color: orange; font-weight: bold; }
-        .fail { color: red; font-weight: bold; }
-        .hint { background: #fff8e1; padding: 8px; margin: 6px 0; border-left: 3px solid #f9a825; }
+        body { font-family: -apple-system, sans-serif; max-width: 850px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; }
+        textarea { width: 100%; height: 140px; font-family: monospace; padding: 10px; border: 1px solid #ddd; border-radius: 6px; }
+        button { padding: 10px 24px; background: #000; color: #fff; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+        th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+        .pass { color: #0a7a2f; font-weight: bold; }
+        .warn { color: #b06a00; font-weight: bold; }
+        .fail { color: #c62828; font-weight: bold; }
+        .bar-bg { background: #eee; border-radius: 6px; height: 24px; width: 100%; overflow: hidden; margin: 10px 0; }
+        .bar-fill { height: 100%; text-align: right; color: white; font-size: 12px; line-height: 24px; padding-right: 6px; box-sizing: border-box; }
+        .alt-card { background: #f0f7ff; border-left: 3px solid #2563eb; padding: 10px; margin: 8px 0; border-radius: 4px; }
+        .depth-1 { color: #666; font-size: 13px; }
+        .badge { display: inline-block; background: #eee; border-radius: 10px; padding: 2px 8px; font-size: 12px; }
     </style>
 </head>
 <body>
     <h1>🩺 Vercel Python Bundle Doctor</h1>
-    <p>Paste your <code>requirements.txt</code> below. Vercel Python Functions cap out at 250MB (standard) or 500MB (Fluid Compute) uncompressed — this estimates where you'll land before you deploy and fail.</p>
+    <p>Paste your <code>requirements.txt</code>. This resolves your <b>full transitive dependency tree</b> via live PyPI data — the real reason bundles blow past Vercel's limit even when your direct requirements look small.</p>
 
     <form method="post">
         <textarea name="requirements_text" placeholder="fastapi
-pandas
-numpy
-torch">{{ input_text or "" }}</textarea>
+langchain
+pandas">{{ input_text or "" }}</textarea>
         <br>
-        <button type="submit">Analyze</button>
+        <button type="submit">Analyze Full Dependency Tree</button>
     </form>
 
     {% if result %}
-    <h2>Result: 
-        {% if "PASS" in result.verdict %}<span class="pass">{{ result.verdict }}</span>
-        {% elif "WARN" in result.verdict %}<span class="warn">{{ result.verdict }}</span>
-        {% else %}<span class="fail">{{ result.verdict }}</span>
+    <h2>
+        {% if "PASS" in result.verdict %}<span class="pass">✅ {{ result.verdict }}</span>
+        {% elif "WARN" in result.verdict %}<span class="warn">⚠️ {{ result.verdict }}</span>
+        {% else %}<span class="fail">❌ {{ result.verdict }}</span>
         {% endif %}
     </h2>
-    <p>Estimated compressed size: <b>{{ result.total_compressed_mb }} MB</b> &nbsp;|&nbsp;
-       Estimated uncompressed: <b>{{ result.estimated_uncompressed_mb }} MB</b></p>
 
+    <p><span class="badge">{{ result.total_direct }} direct packages</span> →
+       <span class="badge">{{ result.total_resolved }} resolved (incl. transitive deps)</span></p>
+
+    <div class="bar-bg">
+        <div class="bar-fill" style="width: {{ result.pct_of_fluid_limit }}%; background: {% if result.pct_of_fluid_limit > 100 %}#c62828{% elif result.pct_of_fluid_limit > 50 %}#b06a00{% else %}#0a7a2f{% endif %};">
+            {{ result.estimated_uncompressed_mb }} MB
+        </div>
+    </div>
+    <p style="font-size: 13px; color: #666;">0 MB — 500 MB Fluid Compute ceiling (250 MB standard-path limit marked by the color shift)</p>
+
+    {% if result.alternatives %}
+    <h3>💡 Live-checked lighter alternatives</h3>
+    {% for alt in result.alternatives %}
+    <div class="alt-card">
+        Swap <b>{{ alt.original }}</b> ({{ alt.original_mb }} MB) → <b>{{ alt.alternative }}</b> ({{ alt.alternative_mb }} MB)
+        — saves <b>{{ alt.savings_mb }} MB</b>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <h3>Full resolved dependency tree</h3>
     <table>
-        <tr><th>Package</th><th>Version</th><th>Size (MB)</th></tr>
+        <tr><th>Package</th><th>Version</th><th>Size (MB)</th><th>Depth</th></tr>
         {% for pkg in result.packages %}
-        <tr>
-            <td>{{ pkg.name }}</td>
+        <tr class="{% if pkg.depth > 0 %}depth-1{% endif %}">
+            <td>{{ "└─ " if pkg.depth > 0 }}{{ pkg.name }}</td>
             <td>{{ pkg.version }}</td>
             <td>{{ (pkg.size_bytes / 1024 / 1024) | round(2) }}</td>
+            <td>{{ "direct" if pkg.depth == 0 else "transitive" }}</td>
         </tr>
         {% endfor %}
     </table>
-
-    {% if result.warnings %}
-    <h3>Suggestions</h3>
-    {% for w in result.warnings %}
-    <div class="hint"><b>{{ w.package }}</b>: {{ w.hint }}</div>
-    {% endfor %}
-    {% endif %}
     {% endif %}
 </body>
 </html>
