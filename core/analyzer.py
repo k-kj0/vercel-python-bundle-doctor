@@ -4,7 +4,8 @@ from typing import List, Dict, Set, Optional
 
 VERCEL_STANDARD_LIMIT_MB = 250
 VERCEL_FLUID_LIMIT_MB = 500
-MAX_DEPTH = 3  # how deep to walk the dependency tree
+MAX_DEPTH = 3
+ROUTE_SPLIT_THRESHOLD_MB = 15
 
 ALTERNATIVES = {
     "pandas": "polars",
@@ -15,6 +16,12 @@ ALTERNATIVES = {
 }
 
 GPU_TAGS = ("cu11", "cu12", "cu13", "rocm", "cuda")
+NVIDIA_CUDA_PREFIXES = ("nvidia-", "triton", "cuda-", "cusparselt", "nvshmem")
+
+NATIVE_INIT_PACKAGES = {
+    "torch", "tensorflow", "numpy", "scipy", "opencv-python",
+    "pandas", "transformers", "onnxruntime", "scikit-learn",
+}
 
 
 def parse_requirements(text: str) -> List[str]:
@@ -52,11 +59,6 @@ async def fetch_package_json(client: httpx.AsyncClient, name: str):
 
 
 def pick_best_size(data: dict, version: str = None) -> int:
-    """
-    Pick the wheel size that best represents what Vercel's Linux/CPU runtime
-    would actually install — not just whatever PyPI lists first, which can be
-    a GPU/CUDA build several GB larger than the real deployed size.
-    """
     releases = data.get("releases", {})
     target = version or data.get("info", {}).get("version")
     files = releases.get(target, []) or data.get("urls", [])
@@ -66,12 +68,10 @@ def pick_best_size(data: dict, version: str = None) -> int:
         non_wheels = [f for f in files if f.get("packagetype") != "bdist_wheel"]
         return non_wheels[0].get("size", 0) if non_wheels else 0
 
-    # 1. Pure-Python wheels are platform-independent and smallest/most honest
     pure = [w for w in wheels if "none-any" in w.get("filename", "")]
     if pure:
         return pure[0].get("size", 0)
 
-    # 2. Prefer manylinux CPU wheels, explicitly excluding GPU/CUDA builds
     linux_cpu = [
         w for w in wheels
         if "manylinux" in w.get("filename", "")
@@ -80,7 +80,6 @@ def pick_best_size(data: dict, version: str = None) -> int:
     if linux_cpu:
         return min(w.get("size", 0) for w in linux_cpu)
 
-    # 3. Last resort: smallest available wheel, so one outlier doesn't skew the estimate
     return min(w.get("size", 0) for w in wheels)
 
 
@@ -127,6 +126,117 @@ def build_fixed_requirements(original_reqs: List[str], alternatives: List[Dict])
         name, _ = split_name_version(req)
         fixed_lines.append(alt_map.get(name, req))
     return "\n".join(fixed_lines)
+
+
+def estimate_cold_start(estimated_uncompressed_mb: float, direct_names: Set[str]) -> Dict:
+    native_hits = sorted(direct_names & NATIVE_INIT_PACKAGES)
+
+    if estimated_uncompressed_mb < 50 and not native_hits:
+        return {
+            "tier": "Fast",
+            "note": "Small, pure-Python bundle — cold starts should typically stay under ~300ms.",
+        }
+    elif estimated_uncompressed_mb < 150 and len(native_hits) <= 1:
+        native_note = f" plus native package init ({native_hits[0]})" if native_hits else ""
+        return {
+            "tier": "Moderate",
+            "note": f"Bundle size{native_note} will add noticeable cold start latency on the first request after idle — likely several hundred ms to ~1s.",
+        }
+    else:
+        heavy_list = ", ".join(native_hits) if native_hits else "large bundle size"
+        return {
+            "tier": "Heavy",
+            "note": f"Large bundle with compiled/native packages ({heavy_list}) — expect 1-3s+ cold starts. Fluid Compute keeps instances warmer between requests and helps here; splitting heavy packages into separate functions (see below) reduces the size any single cold start has to load.",
+        }
+
+
+def suggest_route_split(unique_nodes: List[Dict]) -> Optional[Dict]:
+    direct = [n for n in unique_nodes if n["depth"] == 0]
+    heavy_direct = sorted(
+        [n for n in direct if n["size_bytes"] / 1024 / 1024 > ROUTE_SPLIT_THRESHOLD_MB],
+        key=lambda n: n["size_bytes"], reverse=True,
+    )
+
+    if len(heavy_direct) < 2:
+        return None
+
+    heavy_names = {n["name"] for n in heavy_direct}
+    lightweight = [n["name"] for n in direct if n["name"] not in heavy_names]
+    lightweight_size_mb = sum(
+        n["size_bytes"] for n in direct if n["name"] in lightweight
+    ) / 1024 / 1024
+
+    suggestions = []
+    for pkg in heavy_direct:
+        suggestions.append({
+            "function_name": f"api/{pkg['name'].replace('-', '_')}_handler.py",
+            "packages": [pkg["name"]] + lightweight,
+            "size_mb": round(pkg["size_bytes"] / 1024 / 1024 + lightweight_size_mb, 2),
+        })
+
+    return {
+        "heavy_count": len(heavy_direct),
+        "shared_base": lightweight,
+        "suggestions": suggestions,
+        "note": (
+            f"You have {len(heavy_direct)} large, independent packages bundled into a single "
+            "function. Vercel bundles each Python function based on what that file actually "
+            "imports — so isolating each heavy package into its own route file means routes "
+            "that don't use it stay small and fast, instead of every route paying for the "
+            "heaviest one."
+        ),
+    }
+
+
+def detect_cuda_bloat(unique_nodes: List[Dict], top_level_names: Set[str]) -> Optional[Dict]:
+    if "torch" not in top_level_names:
+        return None
+
+    cuda_packages = [
+        n for n in unique_nodes
+        if any(n["name"].startswith(p) for p in NVIDIA_CUDA_PREFIXES)
+    ]
+    if not cuda_packages:
+        return None
+
+    cuda_total_bytes = sum(n["size_bytes"] for n in cuda_packages)
+    cuda_total_mb = cuda_total_bytes / 1024 / 1024
+
+    return {
+        "cuda_total_mb": round(cuda_total_mb, 2),
+        "cuda_total_bytes": cuda_total_bytes,
+        "package_names": [n["name"] for n in cuda_packages],
+        "package_count": len(cuda_packages),
+        "fix": "pip install torch --index-url https://download.pytorch.org/whl/cpu",
+        "note": (
+            f"{len(cuda_packages)} CUDA/GPU packages ({round(cuda_total_mb, 2)} MB) got pulled in "
+            "because PyPI's default torch build assumes a GPU target. Vercel Functions are CPU-only, "
+            "so none of this is needed — installing from PyTorch's dedicated CPU-only index avoids it entirely."
+        ),
+    }
+
+
+def build_corrected_estimate(total_bytes: int, cuda_bloat: Optional[Dict]) -> Optional[Dict]:
+    if not cuda_bloat:
+        return None
+
+    corrected_bytes = total_bytes - cuda_bloat["cuda_total_bytes"]
+    corrected_uncompressed_mb = (corrected_bytes * 3) / (1024 * 1024)
+
+    if corrected_uncompressed_mb > VERCEL_FLUID_LIMIT_MB:
+        corrected_verdict = "FAIL — exceeds 500MB Fluid Compute limit"
+    elif corrected_uncompressed_mb > VERCEL_STANDARD_LIMIT_MB:
+        corrected_verdict = "WARN — exceeds 250MB standard limit, needs Fluid Compute opt-in"
+    else:
+        corrected_verdict = "PASS — within limits"
+
+    corrected_pct = min(100, round((corrected_uncompressed_mb / VERCEL_FLUID_LIMIT_MB) * 100, 1))
+
+    return {
+        "estimated_uncompressed_mb": round(corrected_uncompressed_mb, 2),
+        "verdict": corrected_verdict,
+        "pct_of_fluid_limit": corrected_pct,
+    }
 
 
 async def analyze_requirements(text: str) -> Dict:
@@ -177,6 +287,11 @@ async def analyze_requirements(text: str) -> Dict:
     pct_of_fluid_limit = min(100, round((estimated_uncompressed_mb / VERCEL_FLUID_LIMIT_MB) * 100, 1))
     fixed_requirements = build_fixed_requirements(requirements, alternatives) if alternatives else None
 
+    cold_start = estimate_cold_start(estimated_uncompressed_mb, top_level_names)
+    route_split = suggest_route_split(unique_nodes)
+    cuda_bloat = detect_cuda_bloat(unique_nodes, top_level_names)
+    corrected_estimate = build_corrected_estimate(total_bytes, cuda_bloat)
+
     return {
         "packages": unique_nodes,
         "total_direct": len(requirements),
@@ -187,4 +302,8 @@ async def analyze_requirements(text: str) -> Dict:
         "verdict": verdict,
         "alternatives": alternatives,
         "fixed_requirements": fixed_requirements,
+        "cold_start": cold_start,
+        "route_split": route_split,
+        "cuda_bloat": cuda_bloat,
+        "corrected_estimate": corrected_estimate,
     }
