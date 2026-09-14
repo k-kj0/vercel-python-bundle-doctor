@@ -6,155 +6,98 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
-    --bg: #ffffff;
-    --fg: #000000;
-    --gray-1: #fafafa;
-    --gray-3: #eaeaea;
-    --gray-5: #999999;
-    --gray-7: #666666;
-    --success: #0a7a2f;
-    --success-bg: #e6f4ea;
-    --warn: #b06a00;
-    --warn-bg: #fff3e0;
-    --fail: #c62828;
-    --fail-bg: #fdecea;
-    --accent: #6d28d9;
+    --bg: #ffffff; --fg: #000000;
+    --gray-1: #fafafa; --gray-3: #eaeaea; --gray-5: #999999; --gray-7: #666666;
+    --success: #0a7a2f; --success-bg: #e6f4ea;
+    --warn: #b06a00; --warn-bg: #fff3e0;
+    --fail: #c62828; --fail-bg: #fdecea;
+    --info: #2563eb;
     --radius: 8px;
     --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; font-family: var(--sans); color: var(--fg); background: var(--bg);
-    -webkit-font-smoothing: antialiased;
-  }
-  .nav {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 18px 32px; border-bottom: 1px solid var(--gray-3);
-  }
+  body { margin: 0; font-family: var(--sans); color: var(--fg); background: var(--bg); -webkit-font-smoothing: antialiased; }
+  .nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 32px; border-bottom: 1px solid var(--gray-3); }
   .nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
-  .nav-brand .icon { font-size: 16px; }
-  .nav a {
-    color: var(--gray-7); text-decoration: none; font-size: 13px;
-    border: 1px solid var(--gray-3); padding: 6px 14px; border-radius: 6px;
-  }
+  .nav a { color: var(--gray-7); text-decoration: none; font-size: 13px; border: 1px solid var(--gray-3); padding: 6px 14px; border-radius: 6px; }
   .nav a:hover { border-color: var(--fg); color: var(--fg); }
-
   .container { max-width: 760px; margin: 0 auto; padding: 56px 24px 80px; }
-
-  .eyebrow {
-    display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
-    text-transform: uppercase; color: var(--gray-7); background: var(--gray-1);
-    border: 1px solid var(--gray-3); padding: 4px 10px; border-radius: 20px; margin-bottom: 16px;
-  }
+  .eyebrow { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gray-7); background: var(--gray-1); border: 1px solid var(--gray-3); padding: 4px 10px; border-radius: 20px; margin-bottom: 16px; }
   h1 { font-size: 34px; letter-spacing: -0.02em; margin: 0 0 12px 0; }
   .lede { font-size: 16px; line-height: 1.6; color: var(--gray-7); margin-bottom: 36px; max-width: 620px; }
   .lede b { color: var(--fg); }
   .lede code { font-family: var(--mono); background: var(--gray-1); padding: 1px 6px; border-radius: 4px; font-size: 14px; }
-
-  .section-label {
-    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
-    color: var(--gray-5); margin: 32px 0 12px 0;
-  }
-
+  .section-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-5); margin: 32px 0 12px 0; }
   .category-group { margin-bottom: 18px; }
   .category-title { font-size: 13px; font-weight: 600; color: var(--gray-7); margin-bottom: 8px; }
   .example-row { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip {
-    display: flex; align-items: center; gap: 7px;
-    background: var(--bg); border: 1px solid var(--gray-3); border-radius: 6px;
-    padding: 8px 14px; font-size: 13px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
-  }
+  .chip { display: flex; align-items: center; gap: 7px; background: var(--bg); border: 1px solid var(--gray-3); border-radius: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
   .chip:hover { border-color: var(--fg); background: var(--gray-1); }
   .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .dot-pass { background: var(--success); }
   .dot-warn { background: var(--warn); }
   .dot-fail { background: var(--fail); }
-
-  form {
-    margin-top: 24px; border: 1px solid var(--gray-3); border-radius: var(--radius);
-    background: var(--bg); overflow: hidden;
-  }
-  .form-header {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 10px 16px; background: var(--gray-1); border-bottom: 1px solid var(--gray-3);
-    font-family: var(--mono); font-size: 12px; color: var(--gray-7);
-  }
-  textarea {
-    width: 100%; height: 150px; font-family: var(--mono); font-size: 14px;
-    padding: 16px; border: none; resize: vertical; display: block;
-  }
+  form { margin-top: 24px; border: 1px solid var(--gray-3); border-radius: var(--radius); background: var(--bg); overflow: hidden; }
+  .form-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--gray-1); border-bottom: 1px solid var(--gray-3); font-family: var(--mono); font-size: 12px; color: var(--gray-7); }
+  textarea { width: 100%; height: 150px; font-family: var(--mono); font-size: 14px; padding: 16px; border: none; resize: vertical; display: block; }
   textarea:focus { outline: none; }
   .form-footer { padding: 14px 16px; border-top: 1px solid var(--gray-3); display: flex; justify-content: flex-end; }
-
-  button[type="submit"] {
-    padding: 10px 20px; background: var(--fg); color: var(--bg); border: none;
-    border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;
-    display: flex; align-items: center; gap: 8px;
-  }
+  button[type="submit"] { padding: 10px 20px; background: var(--fg); color: var(--bg); border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
   button[type="submit"]:hover { background: #333; }
   button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
-
-  .spinner {
-    width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.35);
-    border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; display: none;
-  }
+  .spinner { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
-
   .result { margin-top: 36px; border: 1px solid var(--gray-3); border-radius: var(--radius); padding: 28px; }
   .verdict-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; font-weight: 600; font-size: 13px; }
   .pill-pass { background: var(--success-bg); color: var(--success); }
   .pill-warn { background: var(--warn-bg); color: var(--warn); }
   .pill-fail { background: var(--fail-bg); color: var(--fail); }
-
-  .stat-row { display: flex; gap: 24px; margin: 18px 0; font-size: 13px; color: var(--gray-7); }
+  .stat-row { display: flex; gap: 24px; margin: 18px 0; font-size: 13px; color: var(--gray-7); flex-wrap: wrap; }
   .stat-row b { color: var(--fg); font-size: 14px; }
-
   .bar-track { background: var(--gray-1); border: 1px solid var(--gray-3); border-radius: 6px; height: 30px; overflow: hidden; margin: 16px 0 6px; }
   .bar-fill { height: 100%; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; color: #fff; font-size: 12px; font-weight: 600; font-family: var(--mono); }
   .scale-note { font-size: 12px; color: var(--gray-5); margin-bottom: 24px; }
-
   h3.block-title { font-size: 14px; font-weight: 600; margin: 28px 0 10px; display: flex; align-items: center; gap: 6px; }
-
-  .alt-row {
-    display: flex; justify-content: space-between; align-items: center;
-    border: 1px solid var(--gray-3); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; font-size: 13px;
-  }
+  .alt-row { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--gray-3); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; font-size: 13px; }
   .alt-row .savings { color: var(--success); font-weight: 600; font-family: var(--mono); font-size: 12px; }
-
-  .fixed-box {
-    background: var(--gray-1); border: 1px solid var(--gray-3); border-radius: 6px;
-    padding: 14px; font-family: var(--mono); font-size: 13px; white-space: pre-wrap; position: relative;
-  }
-  .copy-btn {
-    position: absolute; top: 10px; right: 10px; font-size: 12px; padding: 5px 10px;
-    background: var(--bg); border: 1px solid var(--gray-3); border-radius: 5px; cursor: pointer;
-  }
+  .fixed-box { background: var(--gray-1); border: 1px solid var(--gray-3); border-radius: 6px; padding: 14px; font-family: var(--mono); font-size: 13px; white-space: pre-wrap; position: relative; }
+  .copy-btn { position: absolute; top: 10px; right: 10px; font-size: 12px; padding: 5px 10px; background: var(--bg); border: 1px solid var(--gray-3); border-radius: 5px; cursor: pointer; }
   .copy-btn:hover { border-color: var(--fg); }
-
   table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
   th { text-align: left; padding: 8px 6px; color: var(--gray-5); font-weight: 600; border-bottom: 1px solid var(--gray-3); font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
   td { padding: 7px 6px; border-bottom: 1px solid var(--gray-1); font-family: var(--mono); font-size: 12.5px; }
   .depth-row td:first-child { color: var(--gray-5); padding-left: 20px; }
   .type-badge { font-family: var(--sans); background: var(--gray-1); border-radius: 10px; padding: 1px 8px; font-size: 11px; color: var(--gray-7); }
-
+  .cold-start-card { display: flex; align-items: flex-start; gap: 14px; border: 1px solid var(--gray-3); border-radius: 6px; padding: 14px 16px; margin-top: 10px; }
+  .cold-start-tier { flex-shrink: 0; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 12px; }
+  .tier-Fast { background: var(--success-bg); color: var(--success); }
+  .tier-Moderate { background: var(--warn-bg); color: var(--warn); }
+  .tier-Heavy { background: var(--fail-bg); color: var(--fail); }
+  .cold-start-note { font-size: 13px; color: var(--gray-7); line-height: 1.5; }
+  .route-split-note { font-size: 13px; color: var(--gray-7); line-height: 1.5; margin-bottom: 14px; }
+  .route-file { border: 1px solid var(--gray-3); border-radius: 6px; padding: 12px 14px; margin-bottom: 8px; font-family: var(--mono); font-size: 12.5px; }
+  .route-file-name { color: var(--info); font-weight: 600; margin-bottom: 6px; }
+  .route-file-pkgs { color: var(--gray-7); font-size: 12px; }
+  .route-file-size { float: right; color: var(--gray-5); font-family: var(--sans); font-size: 11px; }
   footer { text-align: center; color: var(--gray-5); font-size: 12px; margin-top: 48px; line-height: 1.6; }
 </style>
 </head>
 <body>
 
 <div class="nav">
-  <div class="nav-brand"><span class="icon">🩺</span> Bundle Doctor</div>
+  <div class="nav-brand">🩺 Bundle Doctor</div>
   <a href="https://github.com/k-kj0/vercel-python-bundle-doctor" target="_blank">View source →</a>
 </div>
 
 <div class="container">
-  <span class="eyebrow">Independent tool · Not affiliated with Vercel</span>
+  <span class="eyebrow">Built for developers shipping Python on Vercel</span>
   <h1>Will your Python function fit on Vercel?</h1>
   <p class="lede">
     Paste a <code>requirements.txt</code>. This resolves your <b>full transitive dependency
-    tree</b> from live PyPI data — the real reason bundles blow past Vercel's 250MB / 500MB
-    limits even when your direct requirements look small.
+    tree</b> from live PyPI data, estimates <b>cold start impact</b>, flags <b>CUDA/GPU bloat</b>
+    from packages like torch, and suggests <b>route splitting</b> when unrelated heavy packages
+    are bundled together.
   </p>
 
   <div class="section-label">Try a scenario</div>
@@ -164,6 +107,9 @@
     <div class="example-row">
       <div class="chip" onclick="loadExample('fastapi\nhttpx\npydantic')"><span class="dot dot-pass"></span>Minimal API</div>
       <div class="chip" onclick="loadExample('flask\ngunicorn\nrequests')"><span class="dot dot-pass"></span>Flask + Gunicorn</div>
+      <div class="chip" onclick="loadExample('django\ndjangorestframework\npsycopg2-binary')"><span class="dot dot-warn"></span>Django + DRF</div>
+      <div class="chip" onclick="loadExample('starlette\nuvicorn\npydantic')"><span class="dot dot-pass"></span>Starlette + Uvicorn</div>
+      <div class="chip" onclick="loadExample('flask\nflask-restful\nflask-sqlalchemy')"><span class="dot dot-pass"></span>Flask-RESTful</div>
     </div>
   </div>
 
@@ -172,6 +118,9 @@
     <div class="example-row">
       <div class="chip" onclick="loadExample('fastapi\npandas\nnumpy\nscipy')"><span class="dot dot-warn"></span>Data science stack</div>
       <div class="chip" onclick="loadExample('fastapi\nlangchain\ntorch\ntransformers')"><span class="dot dot-fail"></span>Full AI/LLM stack</div>
+      <div class="chip" onclick="loadExample('fastapi\nscikit-learn\nnumpy\njoblib')"><span class="dot dot-warn"></span>Classic ML (sklearn)</div>
+      <div class="chip" onclick="loadExample('fastapi\nxgboost\nnumpy\npandas')"><span class="dot dot-warn"></span>XGBoost pipeline</div>
+      <div class="chip" onclick="loadExample('fastapi\nopenai\ntiktoken\npydantic')"><span class="dot dot-pass"></span>OpenAI API wrapper</div>
     </div>
   </div>
 
@@ -180,13 +129,49 @@
     <div class="example-row">
       <div class="chip" onclick="loadExample('fastapi\nopencv-python\nnumpy')"><span class="dot dot-fail"></span>Computer vision</div>
       <div class="chip" onclick="loadExample('requests\nbeautifulsoup4\nselenium')"><span class="dot dot-warn"></span>Web scraping</div>
+      <div class="chip" onclick="loadExample('playwright\npytest\nrequests')"><span class="dot dot-fail"></span>Browser automation</div>
+      <div class="chip" onclick="loadExample('fastapi\npillow\nnumpy')"><span class="dot dot-pass"></span>Image processing (lightweight)</div>
+      <div class="chip" onclick="loadExample('fastapi\nface-recognition\nopencv-python\nnumpy')"><span class="dot dot-fail"></span>Face recognition</div>
+    </div>
+  </div>
+
+  <div class="category-group">
+    <div class="category-title">Databases & auth</div>
+    <div class="example-row">
+      <div class="chip" onclick="loadExample('fastapi\nsqlalchemy\npsycopg2-binary\nalembic')"><span class="dot dot-pass"></span>Postgres + SQLAlchemy</div>
+      <div class="chip" onclick="loadExample('fastapi\npymongo\nmotor')"><span class="dot dot-pass"></span>MongoDB stack</div>
+      <div class="chip" onclick="loadExample('fastapi\npython-jose\npasslib\nbcrypt')"><span class="dot dot-pass"></span>JWT auth</div>
+      <div class="chip" onclick="loadExample('fastapi\nredis\ncelery')"><span class="dot dot-pass"></span>Redis + Celery</div>
+      <div class="chip" onclick="loadExample('fastapi\nsqlmodel\nasyncpg')"><span class="dot dot-pass"></span>Async Postgres (SQLModel)</div>
+    </div>
+  </div>
+
+  <div class="category-group">
+    <div class="category-title">Documents & PDFs</div>
+    <div class="example-row">
+      <div class="chip" onclick="loadExample('fastapi\npypdf\nreportlab\npillow')"><span class="dot dot-warn"></span>PDF generation</div>
+      <div class="chip" onclick="loadExample('fastapi\npython-docx\nopenpyxl\npandas')"><span class="dot dot-fail"></span>Office file processing</div>
+      <div class="chip" onclick="loadExample('fastapi\npdfplumber\npandas')"><span class="dot dot-warn"></span>PDF data extraction</div>
+      <div class="chip" onclick="loadExample('fastapi\nweasyprint')"><span class="dot dot-warn"></span>HTML-to-PDF (WeasyPrint)</div>
+      <div class="chip" onclick="loadExample('fastapi\nfpdf2\npillow')"><span class="dot dot-pass"></span>Lightweight PDF (fpdf2)</div>
+    </div>
+  </div>
+
+  <div class="category-group">
+    <div class="category-title">Multiple heavy packages (route split demo)</div>
+    <div class="example-row">
+      <div class="chip" onclick="loadExample('fastapi\ntorch\nopencv-python\npandas')"><span class="dot dot-fail"></span>ML + CV + data (unsplit)</div>
+      <div class="chip" onclick="loadExample('fastapi\ntensorflow\ntransformers\nnumpy')"><span class="dot dot-fail"></span>TensorFlow + Transformers</div>
+      <div class="chip" onclick="loadExample('fastapi\nscikit-learn\nopencv-python\npandas')"><span class="dot dot-fail"></span>sklearn + CV combined</div>
+      <div class="chip" onclick="loadExample('fastapi\ntorch\ntensorflow')"><span class="dot dot-fail"></span>Two frameworks (torch + tf)</div>
+      <div class="chip" onclick="loadExample('fastapi\npandas\nopencv-python\npillow')"><span class="dot dot-warn"></span>Data + imaging combined</div>
     </div>
   </div>
 
   <form method="post" id="analyzeForm">
     <div class="form-header">
       <span>requirements.txt</span>
-      <span>plain text · one package per line</span>
+      <span>plain text · one package per line · type your own or pick an example above</span>
     </div>
     <textarea name="requirements_text" id="reqInput" placeholder="fastapi
 pandas
@@ -215,12 +200,48 @@ numpy">{{ input_text or "" }}</textarea>
       <span><b>{{ result.total_resolved }}</b> resolved incl. transitive deps</span>
     </div>
 
+    <div style="font-size: 12px; color: var(--gray-5); margin-bottom: 4px;">
+      {% if result.corrected_estimate %}As deployed (with default torch install){% else %}Estimated bundle size{% endif %}
+    </div>
     <div class="bar-track">
-      <div class="bar-fill" style="width: {{ result.pct_of_fluid_limit }}%; background: {% if result.pct_of_fluid_limit > 100 %}var(--fail){% elif result.pct_of_fluid_limit > 50 %}var(--warn){% else %}var(--success){% endif %};">
+      <div class="bar-fill" style="width: {{ result.pct_of_fluid_limit }}%; min-width: 70px; white-space: nowrap; background: {% if result.pct_of_fluid_limit > 100 %}var(--fail){% elif result.pct_of_fluid_limit > 50 %}var(--warn){% else %}var(--success){% endif %};">
         {{ result.estimated_uncompressed_mb }} MB
       </div>
     </div>
-    <div class="scale-note">0–500MB Fluid Compute ceiling · orange marks the 250MB standard-path threshold</div>
+
+    {% if result.corrected_estimate %}
+    <div style="font-size: 12px; color: var(--gray-5); margin: 14px 0 4px;">If fixed (CPU-only torch install)</div>
+    <div class="bar-track">
+      <div class="bar-fill" style="width: {{ result.corrected_estimate.pct_of_fluid_limit }}%; min-width: 70px; white-space: nowrap; background: {% if result.corrected_estimate.pct_of_fluid_limit > 100 %}var(--fail){% elif result.corrected_estimate.pct_of_fluid_limit > 50 %}var(--warn){% else %}var(--success){% endif %};">
+        {{ result.corrected_estimate.estimated_uncompressed_mb }} MB
+      </div>
+    </div>
+    <div style="font-size: 12px; color: var(--success); font-weight: 600; margin-top: 4px;">
+      → becomes {{ result.corrected_estimate.verdict }}
+    </div>
+    {% endif %}
+
+    <div class="scale-note" style="margin-top: 10px;">0–500MB Fluid Compute ceiling · orange marks the 250MB standard-path threshold</div>
+
+    {% if result.cuda_bloat %}
+    <h3 class="block-title">🎮 CUDA/GPU bloat detected</h3>
+    <div class="cold-start-card" style="border-color: var(--fail);">
+      <span class="cold-start-tier tier-Heavy">{{ result.cuda_bloat.package_count }} packages</span>
+      <span class="cold-start-note">
+        {{ result.cuda_bloat.note }}
+        <br><br>
+        <b>Fix:</b> <code style="background:var(--gray-1); padding:2px 6px; border-radius:4px; font-family:var(--mono); font-size:12px;">{{ result.cuda_bloat.fix }}</code>
+      </span>
+    </div>
+    {% endif %}
+
+    {% if result.cold_start %}
+    <h3 class="block-title">⏱️ Estimated cold start impact</h3>
+    <div class="cold-start-card">
+      <span class="cold-start-tier tier-{{ result.cold_start.tier }}">{{ result.cold_start.tier }}</span>
+      <span class="cold-start-note">{{ result.cold_start.note }}</span>
+    </div>
+    {% endif %}
 
     {% if result.alternatives %}
     <h3 class="block-title">💡 Lighter alternatives (live-checked on PyPI)</h3>
@@ -228,6 +249,17 @@ numpy">{{ input_text or "" }}</textarea>
     <div class="alt-row">
       <span><b>{{ alt.original }}</b> ({{ alt.original_mb }} MB) → <b>{{ alt.alternative }}</b> ({{ alt.alternative_mb }} MB)</span>
       <span class="savings">−{{ alt.savings_mb }} MB</span>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if result.route_split %}
+    <h3 class="block-title">🧩 Route splitting suggestion</h3>
+    <p class="route-split-note">{{ result.route_split.note }}</p>
+    {% for f in result.route_split.suggestions %}
+    <div class="route-file">
+      <div class="route-file-name">{{ f.function_name }} <span class="route-file-size">~{{ f.size_mb }} MB</span></div>
+      <div class="route-file-pkgs">{{ f.packages | join(', ') }}</div>
     </div>
     {% endfor %}
     {% endif %}
@@ -257,7 +289,7 @@ numpy">{{ input_text or "" }}</textarea>
 
   <footer>
     Built to solve a gap Vercel hasn't shipped a first-party tool for yet —<br>
-    resolving the real bundle size before you deploy, not after it fails.
+    resolving bundle size, cold start risk, and route structure before you deploy, not after it fails.
   </footer>
 </div>
 
